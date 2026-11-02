@@ -288,11 +288,11 @@ containers. `depends_on` uses health conditions so startup order is meaningful.
 
 ### Automated tests
 
-Unit tests (no stack required):
+Unit and database tests (no Compose stack required):
 
 ```text
 pytest -m "not integration" -v
-33 passed, 25 deselected
+37 passed, 25 deselected
 ```
 
 This includes model validation, request-id log formatting, HTTP status
@@ -308,7 +308,9 @@ database-level worker tests:
 - attempt history and event state are written atomically;
 - simulated network failures produce three attempts and a `failed` event;
 - shutdown before delivery releases the event;
-- a transient failure schedules a retry in the future.
+- a transient failure schedules a retry in the future;
+- a real worker subprocess recovers a stale processing lease, delivers the
+  signed payload, and exits `0` on `SIGTERM` (process-level restart/recovery).
 
 End-to-end tests (real Compose stack):
 

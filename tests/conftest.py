@@ -31,6 +31,10 @@ def api():
 
 @pytest.fixture
 def receiver():
+    try:
+        httpx.get(f"{RECEIVER_URL}/health", timeout=2).raise_for_status()
+    except httpx.HTTPError as exc:
+        pytest.skip(f"receiver not reachable at {RECEIVER_URL}: {exc}")
     with httpx.Client(base_url=RECEIVER_URL, timeout=5) as client:
         client.delete("/received")
         yield client
