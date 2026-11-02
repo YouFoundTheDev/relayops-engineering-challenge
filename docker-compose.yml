@@ -1,61 +1,120 @@
 services:
   gateway:
     image: nginx:1.27-alpine
+    restart: unless-stopped
     ports:
       - "8080:80"
     volumes:
       - ./infrastructure/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - frontend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   api:
     build: ./api
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://relayops:relayops@db:5432/relayops
+      DATABASE_URL: postgresql://${POSTGRES_USER:-relayops}:${POSTGRES_PASSWORD:-relayops-dev-password}@db:5432/${POSTGRES_DB:-relayops}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - frontend
       - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   worker:
     build: ./worker
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://relayops:relayops@db:5432/relayops
-      RECEIVER_URL: http://receiver:9000/webhook
-      WEBHOOK_SECRET: relayops-dev-secret
+      DATABASE_URL: postgresql://${POSTGRES_USER:-relayops}:${POSTGRES_PASSWORD:-relayops-dev-password}@db:5432/${POSTGRES_DB:-relayops}
+      RECEIVER_URL: ${RECEIVER_URL:-http://receiver:9000/webhook}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-relayops-dev-secret}
+      POLL_INTERVAL: ${POLL_INTERVAL:-1}
+      PROCESSING_LEASE_SECONDS: ${PROCESSING_LEASE_SECONDS:-60}
+      RETRY_BASE_SECONDS: ${RETRY_BASE_SECONDS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      - db
-      - receiver
+      db:
+        condition: service_healthy
+      receiver:
+        condition: service_healthy
     deploy:
       replicas: 2
+    stop_grace_period: 20s
     networks:
       - backend
       - webhooks
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, psycopg; psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=3).close()"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   receiver:
     build: ./receiver
+    restart: unless-stopped
     environment:
-      WEBHOOK_SECRET: relayops-dev-secret
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-relayops-dev-secret}
     ports:
       - "9000:9000"
     networks:
       - webhooks
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: relayops
-      POSTGRES_PASSWORD: relayops
-      POSTGRES_DB: relayops
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_USER: ${POSTGRES_USER:-relayops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-relayops-dev-password}
+      POSTGRES_DB: ${POSTGRES_DB:-relayops}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d:ro
     networks:
       - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 networks:
   frontend:

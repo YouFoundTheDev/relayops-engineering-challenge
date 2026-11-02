@@ -1,9 +1,0 @@
-# Local development overrides (loaded automatically by docker compose).
-services:
-  worker:
-    extra_hosts:
-      - "receiver:192.0.2.10"
-
-  db:
-    ports:
-      - "127.0.0.1::5432"

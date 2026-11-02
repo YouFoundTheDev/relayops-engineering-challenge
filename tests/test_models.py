@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from app.models import EventIn
+from pydantic import ValidationError
 
 
 def test_valid_event():

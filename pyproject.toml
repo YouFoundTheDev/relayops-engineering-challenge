@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires the Docker Compose stack to be running",
+]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+[tool.ruff.lint.per-file-ignores]
+# The mock receiver is a test harness with a frozen contract; keep it byte-for-byte
+# identical to the original rather than reformatting it.
+"receiver/receiver.py" = ["E501"]

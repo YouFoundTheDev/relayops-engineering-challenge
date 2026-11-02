@@ -2,6 +2,10 @@
 import time
 import uuid
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 def test_create_and_get_event(api):
     event_id = f"evt-{uuid.uuid4()}"
