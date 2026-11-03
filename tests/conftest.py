@@ -50,7 +50,7 @@ def test_database_url():
 
 @pytest.fixture
 def clean_database(test_database_url):
-    """Recreate the application schema so DB tests are isolated."""
+    """Drop and recreate the schema so DB tests start clean."""
     schema = SCHEMA_PATH.read_text()
     with psycopg.connect(test_database_url, autocommit=True) as conn:
         conn.execute("DROP TABLE IF EXISTS delivery_attempts CASCADE")

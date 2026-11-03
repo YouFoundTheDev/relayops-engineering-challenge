@@ -1,7 +1,5 @@
--- RelayOps schema (applied by the postgres image on first start).
---
--- The statements are idempotent so the file can also be re-applied to a
--- database created by an older revision of the project.
+-- RelayOps schema. The postgres image runs this on first start.
+-- Kept idempotent so it can also be re-applied to an older local database.
 
 CREATE TABLE IF NOT EXISTS events (
     id              BIGSERIAL PRIMARY KEY,
@@ -18,14 +16,14 @@ CREATE TABLE IF NOT EXISTS events (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Upgrade path for databases created by older revisions.
+-- Columns added after the first release; IF NOT EXISTS keeps old volumes usable.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE events ADD COLUMN IF NOT EXISTS locked_at       TIMESTAMPTZ;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS locked_by       TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS last_error      TEXT;
 
--- event_id is the public idempotency key. The unique index is what makes
--- concurrent submissions of the same event race-safe.
+-- event_id is the idempotency key. This index is what makes concurrent
+-- duplicate submissions safe.
 CREATE UNIQUE INDEX IF NOT EXISTS events_event_id_key ON events (event_id);
 
 CREATE INDEX IF NOT EXISTS events_due_idx ON events (status, next_attempt_at);

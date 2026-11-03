@@ -1,3 +1,4 @@
+# Local/dev defaults only. Override these through .env before using this anywhere shared.
 services:
   gateway:
     image: nginx:1.27-alpine

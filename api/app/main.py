@@ -151,9 +151,9 @@ def create_event(event: EventIn, response: Response):
         ) from None
 
     if existing is None:
-        # The conflicting row disappeared between the INSERT and the SELECT
-        # (for example a rolled-back concurrent transaction). The client can
-        # safely retry instead of receiving a misleading success.
+        # The row vanished between INSERT and SELECT (e.g. the competing
+        # transaction rolled back). Ask the client to retry instead of faking
+        # a success.
         logger.warning("event conflict disappeared", extra={"event_id": event.event_id})
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -1,8 +1,7 @@
-"""Small structured-logging helper shared by the HTTP request path.
+"""JSON logging with the request id attached.
 
-The service emits one JSON object per line so that request ids and delivery
-metadata can be queried without a logging stack. No payloads or secrets are
-included in the records.
+One object per line is easy to grep locally and easy to ship later. Payloads
+and secrets are deliberately left out.
 """
 import contextvars
 import json

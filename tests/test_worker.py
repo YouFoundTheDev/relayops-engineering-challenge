@@ -36,7 +36,7 @@ def test_signature_matches_receiver_algorithm():
 def test_signature_covers_exact_transmitted_bytes():
     body = {"event_id": "evt-1", "type": "x", "payload": {"a": 1}}
     raw = worker.encode_event_body(body)
-    # json.dumps defaults insert spaces; the transmitted bytes must not.
+    # json.dumps adds spaces by default; the bytes we send don't.
     assert b", " not in raw
     assert b": " not in raw
     assert worker.sign_body("secret", raw) != worker.sign_body(

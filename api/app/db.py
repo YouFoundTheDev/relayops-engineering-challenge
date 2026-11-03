@@ -1,9 +1,8 @@
-"""PostgreSQL connection pool for the API.
+"""API database pool.
 
-A single connection shared between threads is unsafe: FastAPI executes sync
-endpoints in a thread pool and psycopg connections are not thread-safe. The
-pool also lets the API recover from a database restart without leaking file
-descriptors.
+psycopg connections are not thread-safe and FastAPI runs sync handlers in a
+thread pool, so each request borrows a connection instead of sharing one.
+The pool also reconnects after a DB restart.
 """
 import logging
 import os
@@ -37,10 +36,10 @@ def _pool_max_size() -> int:
 
 
 def init_pool() -> ConnectionPool:
-    """Create the process-wide pool.
+    """Create the pool without blocking startup.
 
-    ``open(wait=False)`` keeps the API process alive when PostgreSQL is not
-    reachable yet; ``/health`` then reports the dependency as unhealthy.
+    If Postgres is still down, let the process start and let /health report
+    it. Crash-looping here makes the failure harder to see.
     """
     global _pool
     if _pool is not None:

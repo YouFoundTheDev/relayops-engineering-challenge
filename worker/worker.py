@@ -1,10 +1,9 @@
-"""RelayOps delivery worker.
+"""Webhook delivery worker.
 
-Events live in PostgreSQL, which is the source of truth. Every worker claims
-one due event at a time with ``SELECT ... FOR UPDATE SKIP LOCKED`` and marks it
-``processing`` with a lease. If the worker dies, another worker reclaims the
-event after the lease expires. This is an at-least-once system: a crash during
-delivery may produce a duplicate, but it never loses an event.
+Postgres is the queue. A worker claims one due event with SKIP LOCKED, makes
+one signed request, records the result, and moves on. Retries stay in the DB
+via next_attempt_at so a second worker can't grab the same attempt halfway
+through. Delivery is at-least-once: a crash can duplicate, never lose.
 """
 from __future__ import annotations
 
@@ -146,7 +145,7 @@ def build_event_body(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def encode_event_body(body: dict[str, Any]) -> bytes:
-    """Serialise once and sign/transmit the exact same bytes."""
+    """Serialize once. The signature and the request body must match exactly."""
     return json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
@@ -156,7 +155,7 @@ def sign_body(secret: str, raw: bytes) -> str:
 
 
 def classify_response(status_code: int) -> str:
-    """Return ``success``, ``retry`` or ``permanent`` for an HTTP status."""
+    """Turn an HTTP status into success, retry, or permanent failure."""
     if 200 <= status_code < 300:
         return "success"
     if status_code == 429 or 500 <= status_code < 600:
@@ -250,7 +249,7 @@ def record_attempt(
     next_attempt_at: datetime | None,
     last_error: str | None,
 ) -> None:
-    """Persist the attempt and the resulting event state in one transaction."""
+    """Write the attempt row and the new event state together."""
     with pool.connection() as conn:
         with conn.transaction():
             conn.execute(
@@ -279,7 +278,7 @@ def record_attempt(
 def mark_event_failed(
     pool: ConnectionPool, event_pk: int, attempt: int, error: str
 ) -> None:
-    """Mark a claimed event failed without inventing a delivery attempt row."""
+    """Fail a claimed event without adding a fake attempt row."""
     with pool.connection() as conn:
         with conn.transaction():
             conn.execute(
@@ -298,7 +297,7 @@ def mark_event_failed(
 
 
 def release_event(pool: ConnectionPool, event_pk: int, reason: str) -> None:
-    """Return a claimed event to the queue without losing its attempt count."""
+    """Put a claimed event back in the queue and keep its attempt count."""
     with pool.connection() as conn:
         with conn.transaction():
             conn.execute(
@@ -324,12 +323,10 @@ def process_event(
     event: dict[str, Any],
     stop_event: threading.Event,
 ) -> str:
-    """Perform exactly one delivery attempt for a claimed event.
+    """Make one delivery attempt for a claimed event.
 
-    Retries are scheduled in the database via ``next_attempt_at`` instead of
-    sleeping inside the worker. This keeps the event claimable by exactly one
-    worker per attempt: after the attempt is recorded as pending, the event is
-    due only in the future, so another worker cannot deliver it concurrently.
+    Retries are scheduled in the DB with next_attempt_at, not slept here. That
+    is what keeps two workers from delivering the same attempt at once.
     """
     event_pk = int(event["id"])
     event_id = str(event["event_id"])
